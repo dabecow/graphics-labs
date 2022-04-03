@@ -1,0 +1,62 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Init",
+			"type": "shell",
+			"linux": {
+				"command": "mkdir -p ./build/release"
+			},
+			"windows": {
+				"command": "cmd",
+				"args": ["/C", "mkdir .\\build\\release"]
+			}
+		},
+		{
+			"type": "shell",
+			"label": "Compile",
+			"command": "C:\\msys64\\mingw64\\bin\\g++.exe",
+			"args": [
+				"-g",
+				"-c",
+				"${file}",
+				"-o",
+				"${fileDirname}\\build\\${fileBasenameNoExtension}.o"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}"
+			}
+		},
+		{
+			"type": "shell",
+			"label": "Linker",
+			"command": "C:\\msys64\\mingw64\\bin\\g++.exe",
+			"args": [
+				"-o",
+				"${fileBasenameNoExtension}.exe",
+				"${fileDirname}\\build\\${fileBasenameNoExtension}.o",
+				"-lgdi32"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}\\build\\release"
+			}
+		},
+		{
+            "label": "Build g++",
+            "dependsOrder": "sequence",
+			"dependsOn":["Clear", "Init", "Compile", "Linker"],
+			"group": "build"
+        },
+		{
+            "type": "shell",
+            "label": "Clear",
+            "command": "Remove-Item",
+            "args": [
+				"${fileDirname}\\build",
+				"-Recurse",
+				"-Force",
+				"-Confirm:$false"
+            ]
+        }
+	]
+}
