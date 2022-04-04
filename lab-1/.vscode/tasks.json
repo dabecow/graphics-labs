@@ -15,7 +15,7 @@
 		{
 			"type": "shell",
 			"label": "Compile",
-			"command": "C:\\msys64\\mingw64\\bin\\g++.exe",
+			"command": "C:\\MinGW\\bin\\g++.exe",
 			"args": [
 				"-g",
 				"-c",
@@ -30,7 +30,7 @@
 		{
 			"type": "shell",
 			"label": "Linker",
-			"command": "C:\\msys64\\mingw64\\bin\\g++.exe",
+			"command": "C:\\MinGW\\bin\\g++.exe",
 			"args": [
 				"-o",
 				"${fileBasenameNoExtension}.exe",

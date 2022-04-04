@@ -11,11 +11,6 @@
 #include <conio.h>
 using namespace std;
 
-struct MyPOINT {
-	DWORD x;
-	DWORD y;
-};
-
 enum Mode {
 	MODE_HORIZONTAL,
 	MODE_VERTICAL
@@ -29,26 +24,30 @@ enum MenuType {
 	MT_NONE
 };
 
+struct ClientAreaConfig {
+	POINT topLeft;
+	const Mode mode = MODE_HORIZONTAL;
+};
+
 struct MenuConfig {	
 	const DWORD height = HEIGHT / 10,
 	width = WIDTH / 3;
 	const DWORD padding = PADDING;
 
-	const Mode mode = MODE_HORIZONTAL;
-
 	int currentMenu = MT_LINE;
 	const int numberOfElements = 4;
 	const char* menuElements[4] = {"Line", "Rectangle", "Circle", "Zoom"};
 	POINT topLeftPoints[4];
-	// MenuConfig(DWORD _height, DWORD _width, DWORD _padding, Mode _mode): height(_height), width(_width), padding(_padding), mode(_mode) {};
 };
 
-struct {
+struct Line {
 	POINT pointBegin;
 	POINT pointEnd;
-} Line;
+};
 
-MenuConfig config;
+Line line;
+ClientAreaConfig areaConfig;
+MenuConfig menuConfig;
 
 CONSOLE_SCREEN_BUFFER_INFO csbi = { 0 };
 HWND hwnd;
@@ -58,25 +57,27 @@ BOOL isButtonPressed = false;
 HPEN redPen;
 HPEN greenPen;
 
-bool inMenu(POINT cursor);
-bool inDrawArea(POINT cursor);
-
 void initMenu();
 void initPens();
+
 void drawMenu(HDC hdc);
+
+bool inMenu(POINT cursor);
+bool inDrawArea(POINT cursor);
 bool pointInRect(POINT point, POINT topLeftRectPoint);
 int chosenType();
+
 void drawMenuRectangle(HDC hdc, POINT topLeft, const char* text, bool isChosen);
 void drawFigure(HDC hdc);
-
 void drawLineStart(HDC hdc, POINT point);
 void drawLineMoved(HDC hdc, POINT point);
 void drawLineEnd(HDC hdc, POINT point);
 
-// Функция рисования. Помещайте сюда всю графику
 void drawA(HDC hdc)
 {
-	Rectangle(hdc, PADDING, PADDING, PADDING + WIDTH, PADDING + HEIGHT); // Рисуем квадрат
+	DWORD offsetX = areaConfig.topLeft.x + PADDING;
+	DWORD offsetY = areaConfig.topLeft.y + PADDING;
+	Rectangle(hdc, offsetX, offsetY, offsetX + WIDTH, offsetY + HEIGHT); // Рисуем квадрат
 	drawMenu(hdc);
 }
 
@@ -109,7 +110,7 @@ VOID MouseEventProc(MOUSE_EVENT_RECORD mer, HDC hdc)
 			if (inMenu(cursorPoint)) {
 				int _chosenType = chosenType();
 				if (_chosenType != MT_NONE) {
-					config.currentMenu = _chosenType;
+					menuConfig.currentMenu = _chosenType;
 					drawMenu(hdc);
 				}
 			} 
@@ -198,31 +199,38 @@ void initPens() {
 }
 
 void initMenu() {
+	areaConfig.topLeft.x = PADDING;
+	if (areaConfig.mode == MODE_HORIZONTAL) {
+		areaConfig.topLeft.y = PADDING;
+	} else {	
+		areaConfig.topLeft.y = PADDING * 2 + menuConfig.height;
+	}
+
 	POINT topLeft = {};
-	for (int i = 0; i < config.numberOfElements; i++) {
-		if (config.mode == MODE_HORIZONTAL) {
-			topLeft.x = WIDTH + PADDING * 2;
-			topLeft.y = PADDING + (config.height + config.padding) * i;
+	for (int i = 0; i < menuConfig.numberOfElements; i++) {
+		if (areaConfig.mode == MODE_HORIZONTAL) {
+			topLeft.x = areaConfig.topLeft.x + WIDTH + PADDING * 2;
+			topLeft.y = areaConfig.topLeft.y + PADDING + (menuConfig.height + menuConfig.padding) * i;
 		} else {
-			topLeft.x = PADDING + (config.width + config.padding) * i;
+			topLeft.x = PADDING + (menuConfig.width + menuConfig.padding) * i;
 			topLeft.y = PADDING;
 		}
-		config.topLeftPoints[i] = topLeft;
+		menuConfig.topLeftPoints[i] = topLeft;
 	}
 }
 
 void drawMenu(HDC hdc) {
 	POINT topLeft = {};
-	for (int i = 0; i < config.numberOfElements; i++) {
-		topLeft = config.topLeftPoints[i];
+	for (int i = 0; i < menuConfig.numberOfElements; i++) {
+		topLeft = menuConfig.topLeftPoints[i];
 
-		if (config.currentMenu == i)
+		if (menuConfig.currentMenu == i)
 			SelectObject(hdc, greenPen);
 
-		Rectangle(hdc, topLeft.x, topLeft.y, topLeft.x + config.width, topLeft.y + config.height);
+		Rectangle(hdc, topLeft.x, topLeft.y, topLeft.x + menuConfig.width, topLeft.y + menuConfig.height);
 		SelectObject(hdc, redPen);
 		
-		TextOutA(hdc, topLeft.x + config.width / 10, topLeft.y + config.height / 2, config.menuElements[i], strlen(config.menuElements[i]));
+		TextOutA(hdc, topLeft.x + menuConfig.width / 10, topLeft.y + menuConfig.height / 2, menuConfig.menuElements[i], strlen(menuConfig.menuElements[i]));
 
 	}
 }
@@ -230,9 +238,9 @@ void drawMenu(HDC hdc) {
 bool pointInRect(POINT point, POINT topLeftRectPoint) {
 	return 
 		point.x >= topLeftRectPoint.x 
-		&& point.x <= topLeftRectPoint.x + config.width 
+		&& point.x <= topLeftRectPoint.x + menuConfig.width 
 		&& point.y >= topLeftRectPoint.y
-		&& point.y <= topLeftRectPoint.y + config.height;
+		&& point.y <= topLeftRectPoint.y + menuConfig.height;
 }
 
 int chosenType() {
@@ -241,8 +249,8 @@ int chosenType() {
 	ScreenToClient(hwnd, (LPPOINT)&tagPOINT);
 
 	POINT topLeft = {};
-	for (int i = 0; i < config.numberOfElements; i++) {
-		if (pointInRect(tagPOINT, config.topLeftPoints[i]))
+	for (int i = 0; i < menuConfig.numberOfElements; i++) {
+		if (pointInRect(tagPOINT, menuConfig.topLeftPoints[i]))
 			return i;
 	}
 
@@ -250,31 +258,35 @@ int chosenType() {
 }
 
 bool inMenu(POINT cursor) {
-	return cursor.x >= config.topLeftPoints[0].x
-		&& cursor.y >= config.topLeftPoints[0].y
-		&& cursor.x <= config.topLeftPoints[0].x + config.width
-		&& cursor.y <= config.topLeftPoints[config.numberOfElements - 1].y + HEIGHT;
+	return areaConfig.mode == MODE_HORIZONTAL 
+		&& cursor.x >= menuConfig.topLeftPoints[0].x
+		&& cursor.y >= menuConfig.topLeftPoints[0].y
+		&& cursor.x <= menuConfig.topLeftPoints[0].x + menuConfig.width
+		&& cursor.y <= menuConfig.topLeftPoints[menuConfig.numberOfElements - 1].y + HEIGHT
+		||
+		areaConfig.mode == MODE_VERTICAL 
+		&& cursor.y <= menuConfig.topLeftPoints[0].y + menuConfig.height;
 }
 
 bool inDrawArea(POINT cursor) {
-	return cursor.x >= PADDING 
-		&& cursor.y >= PADDING
-		&& cursor.x <= PADDING + WIDTH 
-		&& cursor.y <= PADDING + HEIGHT;
+	return cursor.x >= areaConfig.topLeft.x 
+		&& cursor.y >= areaConfig.topLeft.y
+		&& cursor.x <= areaConfig.topLeft.x + WIDTH 
+		&& cursor.y <= areaConfig.topLeft.y + HEIGHT;
 }
 
 void drawFigure(HDC hdc) {
 
-	switch (config.currentMenu) {
+	switch (menuConfig.currentMenu) {
 		case MT_LINE:
-			MoveToEx(hdc, Line.pointBegin.x, Line.pointBegin.y, NULL);
-			LineTo(hdc, Line.pointEnd.x, Line.pointEnd.y); 
+			MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
+			LineTo(hdc, line.pointEnd.x, line.pointEnd.y); 
 			break;
 		case MT_RECTANGLE:
-			Rectangle(hdc, Line.pointBegin.x, Line.pointBegin.y, Line.pointEnd.x, Line.pointEnd.y);
+			Rectangle(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
 			break;
 		case MT_CIRCLE:
-			Ellipse(hdc, Line.pointBegin.x, Line.pointBegin.y, Line.pointEnd.x, Line.pointEnd.y);
+			Ellipse(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
 			break;
 		default:
 			break;
@@ -282,22 +294,22 @@ void drawFigure(HDC hdc) {
 }
 
 void drawLineStart(HDC hdc, POINT point) {
-	Line.pointBegin = point;
-	Line.pointEnd = point;
+	line.pointBegin = point;
+	line.pointEnd = point;
 	SetROP2(hdc, R2_NOTXORPEN);
-	MoveToEx(hdc, Line.pointBegin.x, Line.pointBegin.y, NULL);
-	LineTo(hdc, Line.pointEnd.x, Line.pointEnd.y);
+	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
+	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
 }
 
 void drawLineMoved(HDC hdc, POINT point) {
-	MoveToEx(hdc, Line.pointBegin.x, Line.pointBegin.y, NULL);
-	LineTo(hdc, Line.pointEnd.x, Line.pointEnd.y);
-	Line.pointEnd = point;
-	MoveToEx(hdc, Line.pointBegin.x, Line.pointBegin.y, NULL);
-	LineTo(hdc, Line.pointEnd.x, Line.pointEnd.y);
+	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
+	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
+	line.pointEnd = point;
+	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
+	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
 }
 void drawLineEnd(HDC hdc, POINT point) {
-	MoveToEx(hdc, Line.pointBegin.x, Line.pointBegin.y, NULL);
-	LineTo(hdc, Line.pointEnd.x, Line.pointEnd.y);
+	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
+	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
 	SetROP2(hdc, R2_COPYPEN);
 }
