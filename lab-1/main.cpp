@@ -2,14 +2,21 @@
 #define UNICODE
 #endif
 
-#define WIDTH 600
-#define HEIGHT 600
-#define PADDING 5
+#define VIEWPORT_LEFT 5
+#define VIEWPORT_TOP 5
+#define VIEWPORT_RIGHT 605
+#define VIEWPORT_BOTTOM 605
 #define CHOSEN_PADDING 2
 #include <windows.h>
 #include <iostream>
 #include <conio.h>
+#include <vector>
+#include <stack>
 using namespace std;
+
+int WIDTH = VIEWPORT_RIGHT - VIEWPORT_LEFT;
+int HEIGHT = VIEWPORT_BOTTOM - VIEWPORT_TOP;
+int PADDING = VIEWPORT_LEFT;
 
 enum Mode {
 	MODE_HORIZONTAL,
@@ -24,6 +31,23 @@ enum MenuType {
 	MT_NONE
 };
 
+enum FigureType {
+	FT_LINE = 0,
+	FT_RECTANGLE,
+	FT_CIRCLE
+};
+
+struct fPOINT {
+	float x;
+	float y;
+};
+
+struct Figure {
+	fPOINT pointBegin,
+		   pointEnd;
+	int figureType;
+};
+
 struct ClientAreaConfig {
 	POINT topLeft;
 	const Mode mode = MODE_HORIZONTAL;
@@ -36,7 +60,7 @@ struct MenuConfig {
 
 	int currentMenu = MT_LINE;
 	const int numberOfElements = 4;
-	const char* menuElements[4] = {"Line", "Rectangle", "Circle", "Zoom"};
+	const char* menuElements[4] = {"Line", "Rectangle", "Circle", "Unzoom"};
 	POINT topLeftPoints[4];
 };
 
@@ -45,15 +69,26 @@ struct Line {
 	POINT pointEnd;
 };
 
+struct fLine {
+	fPOINT pointBegin;
+	fPOINT pointEnd;
+};
+
+stack<fLine> zoomingStack;
+
+vector<Figure> figures;
 Line line;
+
 ClientAreaConfig areaConfig;
 MenuConfig menuConfig;
 
 CONSOLE_SCREEN_BUFFER_INFO csbi = { 0 };
+
 HWND hwnd;
 HANDLE rHnd;
 DWORD SelectedItem = 0;
-BOOL isButtonPressed = false;
+BOOL leftButtonPressed = false;
+BOOL rightButtonPressed = false;
 HPEN redPen;
 HPEN greenPen;
 
@@ -67,18 +102,30 @@ bool inDrawArea(POINT cursor);
 bool pointInRect(POINT point, POINT topLeftRectPoint);
 int chosenType();
 
+void addModel(int type, POINT p1, POINT p2);
+
+void drawModels(HDC hdc);
 void drawMenuRectangle(HDC hdc, POINT topLeft, const char* text, bool isChosen);
-void drawFigure(HDC hdc);
+
 void drawLineStart(HDC hdc, POINT point);
 void drawLineMoved(HDC hdc, POINT point);
 void drawLineEnd(HDC hdc, POINT point);
 
-void drawA(HDC hdc)
+void drawRectStart(HDC hdc, POINT point);
+void drawRectMoved(HDC hdc, POINT point);
+void drawRectEnd(HDC hdc, POINT point);
+
+void redraw(HDC hdc);
+
+fPOINT toNDC(POINT p);
+POINT toDC(fPOINT fp);
+
+void processZooming();
+
+void drawViewPort(HDC hdc)
 {
-	DWORD offsetX = areaConfig.topLeft.x + PADDING;
-	DWORD offsetY = areaConfig.topLeft.y + PADDING;
-	Rectangle(hdc, offsetX, offsetY, offsetX + WIDTH, offsetY + HEIGHT); // Рисуем квадрат
-	drawMenu(hdc);
+	SelectObject(hdc, redPen);
+	Rectangle(hdc, VIEWPORT_LEFT, VIEWPORT_TOP, VIEWPORT_RIGHT, VIEWPORT_BOTTOM); // Рисуем квадрат
 }
 
 void setConsoleSize() // Задание размеров окна консоли
@@ -109,29 +156,51 @@ VOID MouseEventProc(MOUSE_EVENT_RECORD mer, HDC hdc)
 		{
 			if (inMenu(cursorPoint)) {
 				int _chosenType = chosenType();
+				if (_chosenType == MT_ZOOM) {
+					if (zoomingStack.size() <= 1) 
+						return;
+					zoomingStack.pop(); 
+					redraw(hdc);
+				}
 				if (_chosenType != MT_NONE) {
 					menuConfig.currentMenu = _chosenType;
 					drawMenu(hdc);
 				}
 			} 
-			if (!isButtonPressed && inDrawArea(cursorPoint)) {
+			if (!leftButtonPressed && inDrawArea(cursorPoint)) {
 				drawLineStart(hdc, cursorPoint);
-				isButtonPressed = true;
+				leftButtonPressed = true;
 			}
-		}
-		else	
-			if (mer.dwButtonState == 0 && isButtonPressed)
-		    { 
-				drawLineEnd(hdc, cursorPoint);
-				if (inDrawArea(cursorPoint))
-					drawFigure(hdc);
-				isButtonPressed = false;
+		} else if (mer.dwButtonState == RIGHTMOST_BUTTON_PRESSED) {
+			if (!leftButtonPressed && inDrawArea(cursorPoint)) {
+				drawRectStart(hdc, cursorPoint);
+				rightButtonPressed = true;
+			}
+		} else	
+			if (mer.dwButtonState == 0) { 
+				if (leftButtonPressed) {
+					drawLineEnd(hdc, cursorPoint);
+					if (inDrawArea(cursorPoint)) {
+						addModel(menuConfig.currentMenu, line.pointBegin, line.pointEnd);
+					}
+					redraw(hdc);
+					leftButtonPressed = false;
+				} else if (rightButtonPressed) {
+					drawRectEnd(hdc, cursorPoint);
+					rightButtonPressed = false;
+					processZooming();
+					redraw(hdc);
+				}
+				
 			}
 		break;
 	case MOUSE_MOVED:
-		if (isButtonPressed && inDrawArea(cursorPoint))
-		{
-			drawLineMoved(hdc, cursorPoint);
+		if (inDrawArea(cursorPoint)) {
+			if (leftButtonPressed) {
+				drawLineMoved(hdc, cursorPoint);
+			} else if (rightButtonPressed) {
+				drawRectMoved(hdc, cursorPoint);
+			}
 		}
   	}
 }
@@ -149,14 +218,21 @@ int main()
 
 	initPens();
 	initMenu();
-	SelectObject(hdc, redPen); // загружаем созданное перо в контекст
-	drawA(hdc); 
 
+	fLine currentNDC = {
+		.pointBegin = {.x = 0, .y =0}, 
+		.pointEnd = {.x = 1, .y = 1}
+	};
+
+	zoomingStack.push(currentNDC);
+	drawViewPort(hdc); 
+	drawMenu(hdc);
+	
 	DWORD numEvents = 0;
 	DWORD numEventsRead = 0;
 	bool isRunning = true;
 
-	// initMenu();
+	
 	while (isRunning) {
 		// Определить количество событий консоли
 		GetConsoleScreenBufferInfo(rHnd, &csbi);
@@ -177,7 +253,7 @@ int main()
 
 				if (eventBuffer[i].EventType == FOCUS_EVENT) {
 					Sleep(300);
-					drawA(hdc); 
+					drawViewPort(hdc); 
 				}
 				
 				else if (eventBuffer[i].EventType == MOUSE_EVENT) {
@@ -220,6 +296,7 @@ void initMenu() {
 }
 
 void drawMenu(HDC hdc) {
+	SelectObject(hdc, redPen);
 	POINT topLeft = {};
 	for (int i = 0; i < menuConfig.numberOfElements; i++) {
 		topLeft = menuConfig.topLeftPoints[i];
@@ -275,24 +352,6 @@ bool inDrawArea(POINT cursor) {
 		&& cursor.y <= areaConfig.topLeft.y + HEIGHT;
 }
 
-void drawFigure(HDC hdc) {
-
-	switch (menuConfig.currentMenu) {
-		case MT_LINE:
-			MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
-			LineTo(hdc, line.pointEnd.x, line.pointEnd.y); 
-			break;
-		case MT_RECTANGLE:
-			Rectangle(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
-			break;
-		case MT_CIRCLE:
-			Ellipse(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
-			break;
-		default:
-			break;
-	}
-}
-
 void drawLineStart(HDC hdc, POINT point) {
 	line.pointBegin = point;
 	line.pointEnd = point;
@@ -308,8 +367,117 @@ void drawLineMoved(HDC hdc, POINT point) {
 	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
 	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
 }
+
 void drawLineEnd(HDC hdc, POINT point) {
 	MoveToEx(hdc, line.pointBegin.x, line.pointBegin.y, NULL);
 	LineTo(hdc, line.pointEnd.x, line.pointEnd.y);
 	SetROP2(hdc, R2_COPYPEN);
+}
+
+void drawRectStart(HDC hdc, POINT point) {
+	line.pointBegin = point;
+	line.pointEnd = point;
+	SetROP2(hdc, R2_NOTXORPEN);
+	Rectangle(hdc, point.x, point.y, point.x, point.y);
+}
+
+void drawRectMoved(HDC hdc, POINT point) {
+	Rectangle(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
+	line.pointEnd.x = point.x;
+	line.pointEnd.y = line.pointBegin.y + point.x - line.pointBegin.x;
+	Rectangle(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
+}
+
+void drawRectEnd(HDC hdc, POINT point) {
+	Rectangle(hdc, line.pointBegin.x, line.pointBegin.y, line.pointEnd.x, line.pointEnd.y);
+	SetROP2(hdc, R2_COPYPEN);
+}
+
+void addModel(int type, POINT p1, POINT p2) {
+	Figure figure;
+	switch (type) {
+		case MT_LINE:
+			figure.figureType = FT_LINE;
+			break;
+		case MT_RECTANGLE:
+			figure.figureType = FT_RECTANGLE;
+			break;
+		case MT_CIRCLE:
+			figure.figureType = FT_CIRCLE;
+			break;
+		default:
+			return;
+	}
+
+	figure.pointBegin = toNDC(p1);
+	figure.pointEnd = toNDC(p2);
+	figures.push_back(figure);
+}
+
+void drawModels(HDC hdc) {
+	for (size_t i = 0; i < figures.size(); i++)
+	{
+		Figure* figure = &figures.at(i);
+		POINT p1 = toDC(figure->pointBegin), p2 = toDC(figure->pointEnd);
+		switch (figure->figureType)
+		{
+		case FT_LINE:
+			MoveToEx(hdc, p1.x, p1.y, NULL);
+			LineTo(hdc, p2.x, p2.y); 
+			break;
+		case FT_RECTANGLE:
+			Rectangle(hdc, p1.x, p1.y, p2.x, p2.y);
+			break;
+		case FT_CIRCLE:
+			Ellipse(hdc, p1.x, p1.y, p2.x, p2.y);	
+			break;
+		default:
+			break;
+		}		
+	}
+	
+}
+
+fPOINT toNDC(POINT p) {
+	fLine currentNDC = zoomingStack.top();
+	fPOINT sx = { 
+		.x = (float) (VIEWPORT_RIGHT - VIEWPORT_LEFT)/(currentNDC.pointEnd.x - currentNDC.pointBegin.x),
+		.y = (float) (VIEWPORT_BOTTOM - VIEWPORT_TOP)/(currentNDC.pointEnd.y - currentNDC.pointBegin.y)
+	};
+	fPOINT fp = {
+		.x = (float) (p.x - VIEWPORT_LEFT)/sx.x, 
+		.y = (float) (p.y - VIEWPORT_TOP)/sx.y
+	};
+	return fp;
+}
+
+POINT toDC(fPOINT fp) {
+	fLine currentNDC = zoomingStack.top();
+	fPOINT sx = { 
+		.x = (float) (VIEWPORT_RIGHT - VIEWPORT_LEFT)/(currentNDC.pointEnd.x - currentNDC.pointBegin.x),
+		.y = (float) (VIEWPORT_BOTTOM - VIEWPORT_TOP)/(currentNDC.pointEnd.y - currentNDC.pointBegin.y)
+	};
+	POINT p = {
+		.x = VIEWPORT_LEFT + sx.x * (fp.x - currentNDC.pointBegin.x),
+		.y = VIEWPORT_TOP + sx.y * (fp.y - currentNDC.pointBegin.y)
+	};
+	return p;
+}
+
+void processZooming() {
+	fLine currentNDC = {
+		.pointBegin = toNDC(line.pointBegin),
+		.pointEnd = toNDC(line.pointEnd)
+	};
+	zoomingStack.push(currentNDC);
+}
+
+void redraw(HDC hdc) {
+	// InvalidateRect(hwnd, NULL, TRUE);
+	// drawMenu(hdc);
+	HRGN rgn = CreateRectRgn(VIEWPORT_LEFT, VIEWPORT_TOP, VIEWPORT_RIGHT, VIEWPORT_BOTTOM);
+	SelectClipRgn(hdc, rgn);
+	drawViewPort(hdc);
+	drawModels(hdc);
+	SelectClipRgn(hdc, NULL);
 }
