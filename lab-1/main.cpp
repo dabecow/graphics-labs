@@ -14,9 +14,9 @@
 #include <stack>
 using namespace std;
 
-int WIDTH = VIEWPORT_RIGHT - VIEWPORT_LEFT;
-int HEIGHT = VIEWPORT_BOTTOM - VIEWPORT_TOP;
-int PADDING = VIEWPORT_LEFT;
+// int WIDTH = VIEWPORT_RIGHT - VIEWPORT_LEFT;
+// int HEIGHT = VIEWPORT_BOTTOM - VIEWPORT_TOP;
+// int PADDING = VIEWPORT_LEFT;
 
 enum Mode {
 	MODE_HORIZONTAL,
@@ -54,9 +54,9 @@ struct ClientAreaConfig {
 };
 
 struct MenuConfig {	
-	const DWORD height = HEIGHT / 10,
-	width = WIDTH / 3;
-	const DWORD padding = PADDING;
+	const DWORD height = (VIEWPORT_BOTTOM - VIEWPORT_TOP) / 10,
+	width = (VIEWPORT_RIGHT - VIEWPORT_LEFT) / 3;
+	const DWORD padding = VIEWPORT_LEFT;
 
 	int currentMenu = MT_LINE;
 	const int numberOfElements = 4;
@@ -157,6 +157,7 @@ VOID MouseEventProc(MOUSE_EVENT_RECORD mer, HDC hdc)
 			if (inMenu(cursorPoint)) {
 				int _chosenType = chosenType();
 				if (_chosenType == MT_ZOOM) {
+					_chosenType = MT_LINE;
 					if (zoomingStack.size() <= 1) 
 						return;
 					zoomingStack.pop(); 
@@ -253,7 +254,7 @@ int main()
 
 				if (eventBuffer[i].EventType == FOCUS_EVENT) {
 					Sleep(300);
-					drawViewPort(hdc); 
+					redraw(hdc);
 				}
 				
 				else if (eventBuffer[i].EventType == MOUSE_EVENT) {
@@ -275,21 +276,21 @@ void initPens() {
 }
 
 void initMenu() {
-	areaConfig.topLeft.x = PADDING;
+	areaConfig.topLeft.x = VIEWPORT_LEFT;
 	if (areaConfig.mode == MODE_HORIZONTAL) {
-		areaConfig.topLeft.y = PADDING;
+		areaConfig.topLeft.y = VIEWPORT_LEFT;
 	} else {	
-		areaConfig.topLeft.y = PADDING * 2 + menuConfig.height;
+		areaConfig.topLeft.y = VIEWPORT_TOP * 2 + menuConfig.height;
 	}
 
 	POINT topLeft = {};
 	for (int i = 0; i < menuConfig.numberOfElements; i++) {
 		if (areaConfig.mode == MODE_HORIZONTAL) {
-			topLeft.x = areaConfig.topLeft.x + WIDTH + PADDING * 2;
-			topLeft.y = areaConfig.topLeft.y + PADDING + (menuConfig.height + menuConfig.padding) * i;
+			topLeft.x = areaConfig.topLeft.x + (VIEWPORT_RIGHT - VIEWPORT_LEFT) + VIEWPORT_LEFT * 2;
+			topLeft.y = areaConfig.topLeft.y + VIEWPORT_TOP + (menuConfig.height + menuConfig.padding) * i;
 		} else {
-			topLeft.x = PADDING + (menuConfig.width + menuConfig.padding) * i;
-			topLeft.y = PADDING;
+			topLeft.x = VIEWPORT_LEFT + (menuConfig.width + menuConfig.padding) * i;
+			topLeft.y = VIEWPORT_TOP;
 		}
 		menuConfig.topLeftPoints[i] = topLeft;
 	}
@@ -339,7 +340,7 @@ bool inMenu(POINT cursor) {
 		&& cursor.x >= menuConfig.topLeftPoints[0].x
 		&& cursor.y >= menuConfig.topLeftPoints[0].y
 		&& cursor.x <= menuConfig.topLeftPoints[0].x + menuConfig.width
-		&& cursor.y <= menuConfig.topLeftPoints[menuConfig.numberOfElements - 1].y + HEIGHT
+		&& cursor.y <= menuConfig.topLeftPoints[menuConfig.numberOfElements - 1].y + (VIEWPORT_BOTTOM - VIEWPORT_TOP)
 		||
 		areaConfig.mode == MODE_VERTICAL 
 		&& cursor.y <= menuConfig.topLeftPoints[0].y + menuConfig.height;
@@ -348,8 +349,8 @@ bool inMenu(POINT cursor) {
 bool inDrawArea(POINT cursor) {
 	return cursor.x >= areaConfig.topLeft.x 
 		&& cursor.y >= areaConfig.topLeft.y
-		&& cursor.x <= areaConfig.topLeft.x + WIDTH 
-		&& cursor.y <= areaConfig.topLeft.y + HEIGHT;
+		&& cursor.x <= areaConfig.topLeft.x + (VIEWPORT_RIGHT - VIEWPORT_LEFT) 
+		&& cursor.y <= areaConfig.topLeft.y + (VIEWPORT_BOTTOM - VIEWPORT_TOP);
 }
 
 void drawLineStart(HDC hdc, POINT point) {
@@ -445,8 +446,8 @@ fPOINT toNDC(POINT p) {
 		.y = (float) (VIEWPORT_BOTTOM - VIEWPORT_TOP)/(currentNDC.pointEnd.y - currentNDC.pointBegin.y)
 	};
 	fPOINT fp = {
-		.x = (float) (p.x - VIEWPORT_LEFT)/sx.x, 
-		.y = (float) (p.y - VIEWPORT_TOP)/sx.y
+		.x = (float) (p.x - VIEWPORT_LEFT)/sx.x + currentNDC.pointBegin.x, 
+		.y = (float) (p.y - VIEWPORT_TOP)/sx.y +  + currentNDC.pointBegin.y
 	};
 	return fp;
 }
@@ -470,11 +471,11 @@ void processZooming() {
 		.pointEnd = toNDC(line.pointEnd)
 	};
 	zoomingStack.push(currentNDC);
+	menuConfig.currentMenu = MT_LINE;
 }
 
 void redraw(HDC hdc) {
-	// InvalidateRect(hwnd, NULL, TRUE);
-	// drawMenu(hdc);
+	drawMenu(hdc);
 	HRGN rgn = CreateRectRgn(VIEWPORT_LEFT, VIEWPORT_TOP, VIEWPORT_RIGHT, VIEWPORT_BOTTOM);
 	SelectClipRgn(hdc, rgn);
 	drawViewPort(hdc);
