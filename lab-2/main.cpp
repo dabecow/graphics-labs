@@ -23,7 +23,7 @@ enum Mode {
     M_FOUR
 };
 
-enum SingleFunnyCircleZone {
+enum FunnySnowmanCircleZone {
     CZ_1 = 0,
     CZ_2,
     CZ_3,
@@ -34,7 +34,7 @@ int currentMode = M_CRUSH;
 
 void processKeys(int key, int x, int y);
 void processRotation();
-void processSteppingForFun(bool directionIsRight);
+void processSteppingForFunnnySnowman(bool directionIsRight);
 
 void Initialize();
 void Display();
@@ -91,13 +91,13 @@ void processKeys(int key, int x, int y) {
             break;
         case GLUT_KEY_LEFT:
             if (currentMode == M_SINGLE_FUNNY)
-                processSteppingForFun(false);
+                processSteppingForFunnnySnowman(false);
             else
                 alfaY-=STEP;
             break;
         case GLUT_KEY_RIGHT:
             if (currentMode == M_SINGLE_FUNNY)
-                processSteppingForFun(true);
+                processSteppingForFunnnySnowman(true);
             else
                 alfaY+=STEP;
             break;
@@ -136,7 +136,7 @@ void processKeys(int key, int x, int y) {
                 case GLUT_KEY_F10:
                     currentMode = M_SINGLE_FUNNY;
                     break;
-                case GLUT_KEY_F11:
+                case GLUT_KEY_F12:
                     currentMode = M_FOUR;
                     break;
                 default:
@@ -321,7 +321,7 @@ void processRotation() {
     glRotatef(alfaY, 0.0, 1.0, 0.0);
 }
 
-void processSteppingForFun(bool directionIsRight) {
+void processSteppingForFunnnySnowman(bool directionIsRight) {
     float multiplier = directionIsRight ? 1 : -1;
 
     switch (currentFunState) {
@@ -372,5 +372,30 @@ void drawFunnySnowman(){
 }
 
 void drawFourSnowmen(){
+    glPushMatrix();
+    drawAxes();
+    drawSnowman(true); //c1
 
+    glRotatef(alfaY, 0, 1.0, 0);
+    glTranslatef(bodyRadius * 2, 0, 0); //c2
+    glScalef(SCALE, SCALE, SCALE);
+    drawAxes();
+    drawSnowman(true);
+
+    glPushMatrix();
+    glRotatef(alfaY, 0, 0, 1.0);
+    glTranslatef(0, bodyRadius*3, 0); //c3
+    glScalef(SCALE, SCALE, SCALE);
+    drawAxes();
+    drawSnowman(true);
+    glPopMatrix();
+
+    glRotatef(alfaY, 0, 1.0, 0);
+    glTranslatef(bodyRadius*2, bodyRadius+headRadius, 0);
+    float doubledScale = SCALE * SCALE;
+    glScalef(doubledScale, doubledScale, doubledScale);
+    drawAxes();
+    drawSnowman(true);
+
+    glPopMatrix();
 }

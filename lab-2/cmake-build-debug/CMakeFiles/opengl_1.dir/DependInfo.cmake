@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/Users/andrew/Desktop/opengl-1/main.cpp" "/Users/andrew/Desktop/opengl-1/cmake-build-debug/CMakeFiles/opengl_1.dir/main.cpp.o"
+  "/Users/andrew/Documents/local.nosync/Учеба/Курс 3/Компьютерная графика/graphics-labs/lab-2/main.cpp" "/Users/andrew/Documents/local.nosync/Учеба/Курс 3/Компьютерная графика/graphics-labs/lab-2/cmake-build-debug/CMakeFiles/opengl_1.dir/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "AppleClang")
 

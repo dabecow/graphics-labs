@@ -6,11 +6,11 @@
 
 #IncludeRegexTransform: 
 
-/Users/andrew/Desktop/opengl-1/main.cpp
+/Users/andrew/Documents/local.nosync/Учеба/Курс 3/Компьютерная графика/graphics-labs/lab-2/main.cpp
 iostream
 -
 GLUT/glut.h
-/Users/andrew/Desktop/opengl-1/GLUT/glut.h
+/Users/andrew/Documents/local.nosync/Учеба/Курс 3/Компьютерная графика/graphics-labs/lab-2/GLUT/glut.h
 math.h
-/Users/andrew/Desktop/opengl-1/math.h
+/Users/andrew/Documents/local.nosync/Учеба/Курс 3/Компьютерная графика/graphics-labs/lab-2/math.h
 
