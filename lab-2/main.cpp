@@ -1,4 +1,3 @@
-#include <iostream>
 #include "GLUT/glut.h"
 #include "math.h"
 
